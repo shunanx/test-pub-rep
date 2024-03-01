@@ -8,10 +8,12 @@ RUN #yum groupinstall -y "Development Tools"
 #Install unixODBC
 WORKDIR /root
 RUN yumdownloader --source unixODBC
+RUN echo "yumdownloader --source unixODBC"
 RUN rpm -ivh unixODBC*.src.rpm
 RUN ls unixODBC*.src.rpm
 WORKDIR /root/rpmbuild/SOURCES
 RUN mkdir /root/rpmbuild/SOURCES/unixODBC
+RUN echo "tar -xvf unixODBC*.tar.gz -C unixODBC --strip-components=1"
 RUN tar -xvf unixODBC*.tar.gz -C unixODBC --strip-components=1
 RUN rm unixODBC*.tar.gz unixODBC*.src.rpm
 WORKDIR /root/rpmbuild/SOURCES/unixODBC
