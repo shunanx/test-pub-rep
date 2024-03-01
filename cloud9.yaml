@@ -1,0 +1,311 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AWS CloudFormation template for dynamic Cloud 9 setups. Modified based on https://github.com/aws-samples/aws-cloud9-bootstrapping-example/blob/main/example_instancestack.yaml
+Parameters:
+  # DBMigrateXpressC9InstanceType:
+  #   Description: DBMigrateXpress Cloud9 instance type
+  #   Type: String
+  #   Default: t3.small
+  #   AllowedValues:
+  #     - t2.micro
+  #     - t3.micro
+  #     - t3.small
+  #     - t3.medium
+  # ConstraintDescription: Must be a valid Cloud9 instance type
+  # DBMigrateXpressC9EnvType:
+  #   Description: Environment type.
+  #   Default: self
+  #   Type: String
+  #   AllowedValues:
+  #     - self
+  #     - 3rdParty
+  #   ConstraintDescription: must specify self or 3rdParty.
+  # DBMigrateXpressOwnerArn:
+  #   Type: String
+  #   Description: The Arn of the Cloud9 Owner to be set if 3rdParty deployment.
+  #   Default: ""
+  # DBMigrateXpressC9InstanceVolumeSize:
+  #   Type: Number
+  #   Description: The Size in GB of the Cloud9 Instance Volume.
+  #   Default: 20
+
+# Conditions:
+#   Create3rdPartyResources: !Equals [!Ref DBMigrateXpressC9EnvType, 3rdParty]
+
+Resources:
+  ################## PERMISSIONS AND ROLES #################
+  DBMigrateXpressC9Role:
+    Type: AWS::IAM::Role
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: AWS DBMigrateXpress
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ssm.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      Path: "/"
+
+  DBMigrateXpressC9LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName:
+            Fn::Join:
+              - ""
+              - - DBMigrateXpressC9LambdaPolicy-
+                - Ref: AWS::Region
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:DescribeStackResources
+                  - ec2:DescribeInstances
+                  - ec2:AssociateIamInstanceProfile
+                  - ec2:ModifyInstanceAttribute
+                  - ec2:ReplaceIamInstanceProfileAssociation
+                  - ec2:RebootInstances
+                  - iam:ListInstanceProfiles
+                  - iam:PassRole
+                Resource: "*"
+
+  ################## LAMBDA BOOTSTRAP FUNCTION ################
+
+  DBMigrateXpressC9BootstrapInstanceLambda:
+    Description: Bootstrap Cloud9 instance
+    Type: Custom::DBMigrateXpressC9BootstrapInstanceLambda
+    DependsOn:
+      - DBMigrateXpressC9BootstrapInstanceLambdaFunction
+      - DBMigrateXpressC9Instance
+      - DBMigrateXpressC9InstanceProfile
+      - DBMigrateXpressC9LambdaExecutionRole
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: AWS DBMigrateXpress
+      ServiceToken:
+        Fn::GetAtt:
+          - DBMigrateXpressC9BootstrapInstanceLambdaFunction
+          - Arn
+      REGION:
+        Ref: AWS::Region
+      StackName:
+        Ref: AWS::StackName
+      EnvironmentId:
+        Ref: DBMigrateXpressC9Instance
+      LabIdeInstanceProfileName:
+        Ref: DBMigrateXpressC9InstanceProfile
+      LabIdeInstanceProfileArn:
+        Fn::GetAtt:
+          - DBMigrateXpressC9InstanceProfile
+          - Arn
+
+  DBMigrateXpressC9BootstrapInstanceLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: AWS DBMigrateXpress
+      Handler: index.lambda_handler
+      Role:
+        Fn::GetAtt:
+          - DBMigrateXpressC9LambdaExecutionRole
+          - Arn
+      Runtime: python3.9
+      MemorySize: 256
+      Timeout: "600"
+      Code:
+        ZipFile: |
+          from __future__ import print_function
+          import boto3
+          import json
+          import os
+          import time
+          import traceback
+          import cfnresponse
+
+          def lambda_handler(event, context):
+              # logger.info('event: {}'.format(event))
+              # logger.info('context: {}'.format(context))
+              responseData = {}
+
+              status = cfnresponse.SUCCESS
+              
+              if event['RequestType'] == 'Delete':
+                  responseData = {'Success': 'Custom Resource removed'}
+                  cfnresponse.send(event, context, status, responseData, 'CustomResourcePhysicalID')              
+
+              if event['RequestType'] == 'Create':
+                  try:
+                      # Open AWS clients
+                      ec2 = boto3.client('ec2')
+
+                      # Get the InstanceId of the Cloud9 IDE
+                      instance = ec2.describe_instances(Filters=[{'Name': 'tag:Name','Values': ['aws-cloud9-'+event['ResourceProperties']['StackName']+'-'+event['ResourceProperties']['EnvironmentId']]}])['Reservations'][0]['Instances'][0]
+                      # logger.info('instance: {}'.format(instance))
+
+                      # Create the IamInstanceProfile request object
+                      iam_instance_profile = {
+                          'Arn': event['ResourceProperties']['LabIdeInstanceProfileArn'],
+                          'Name': event['ResourceProperties']['LabIdeInstanceProfileName']
+                      }
+                      # logger.info('iam_instance_profile: {}'.format(iam_instance_profile))
+
+                      # Wait for Instance to become ready before adding Role
+                      instance_state = instance['State']['Name']
+                      # logger.info('instance_state: {}'.format(instance_state))
+                      while instance_state != 'running':
+                          time.sleep(5)
+                          instance_state = ec2.describe_instances(InstanceIds=[instance['InstanceId']])
+                          # logger.info('instance_state: {}'.format(instance_state))
+
+                      # attach instance profile
+                      response = ec2.associate_iam_instance_profile(IamInstanceProfile=iam_instance_profile, InstanceId=instance['InstanceId'])
+                      # logger.info('response - associate_iam_instance_profile: {}'.format(response))
+                      r_ec2 = boto3.resource('ec2')
+
+                      response = ec2.reboot_instances(InstanceIds=[instance['InstanceId']], DryRun=False)
+
+                      responseData = {'Success': 'Started bootstrapping for instance: '+instance['InstanceId']}
+                      cfnresponse.send(event, context, status, responseData, 'CustomResourcePhysicalID')
+                      
+                  except Exception as e:
+                      status = cfnresponse.FAILED
+                      print(traceback.format_exc())
+                      responseData = {'Error': traceback.format_exc(e)}
+                  finally:
+                      cfnresponse.send(event, context, status, responseData, 'CustomResourcePhysicalID')
+  ################## SSM BOOTSRAP HANDLER ###############
+  DBMigrateXpressBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  DBMigrateXpressC9SSMDocument:
+    Type: AWS::SSM::Document
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: AWS DBMigrateXpress
+      DocumentType: Command
+      DocumentFormat: YAML
+      Content:
+        schemaVersion: "2.2"
+        description: Bootstrap Cloud9 Instance
+        mainSteps:
+          - action: aws:runShellScript
+            name: DBMigrateXpressC9bootstrap
+            inputs:
+              runCommand:
+                - "#!/bin/bash"
+                - date
+                - sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+                - sudo dnf install -y terraform
+                - terraform -help
+                - echo '=== Resizing the Instance volume'
+                - !Sub SIZE=20
+                - !Sub REGION=${AWS::Region}
+                - |
+                  INSTANCEID=$(cat /sys/devices/virtual/dmi/id/board_asset_tag)
+                  VOLUMEID=$(aws ec2 describe-instances \
+                    --instance-id $INSTANCEID \
+                    --query "Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId" \
+                    --output text --region $REGION)
+                  aws ec2 modify-volume --volume-id $VOLUMEID --size $SIZE --region $REGION
+                - sudo -H -u ec2-user bash -c "cd /home/ec2-user/environment; git clone https://github.com/aws-samples/aws-cloud9-bootstrapping-example.git"
+                - sleep 10
+                - aws ec2 reboot-instances --instance-ids $INSTANCEID
+                - echo "Bootstrap completed with return code $?"
+
+  DBMigrateXpressC9BootstrapAssociation:
+    Type: AWS::SSM::Association
+    DependsOn: DBMigrateXpressBucket
+    Properties:
+      Name: !Ref DBMigrateXpressC9SSMDocument
+      OutputLocation:
+        S3Location:
+          OutputS3BucketName: !Ref DBMigrateXpressBucket
+          OutputS3KeyPrefix: bootstrapoutput
+      Targets:
+        - Key: tag:SSMBootstrap
+          Values:
+            - Active
+
+  ################## INSTANCE #####################
+  DBMigrateXpressC9InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: DBMigrateXpressC9Role
+
+  DBMigrateXpressC9Instance:
+    Description: "-"
+    DependsOn: DBMigrateXpressC9BootstrapAssociation
+    Type: AWS::Cloud9::EnvironmentEC2
+    Properties:
+      Description: AWS Cloud9 instance for DBMigrateXpresss
+      AutomaticStopTimeMinutes: 1800
+      ImageId: amazonlinux-2023-x86_64
+      InstanceType: t3.small
+      Name:
+        Ref: AWS::StackName
+      # OwnerArn:
+      #   !If [
+      #     Create3rdPartyResources,
+      #     !Ref DBMigrateXpressOwnerArn,
+      #     !Ref "AWS::NoValue",
+      #   ]
+      Tags:
+        - Key: SSMBootstrap
+          Value: Active
+        - Key: Environment
+          Value: AWS DBMigrateXpress
+
+Outputs:
+  Cloud9IDE:
+    Value:
+      Fn::Join:
+        - ""
+        - - https://
+          - Ref: AWS::Region
+          - ".console.aws.amazon.com/cloud9/ide/"
+          - Ref: DBMigrateXpressC9Instance
+          - "?region="
+          - Ref: AWS::Region
+  DBMigrateXpressBucket:
+    Value:
+      Ref: DBMigrateXpressBucket
