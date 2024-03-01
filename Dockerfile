@@ -9,9 +9,11 @@ RUN yum groupinstall -y "Development Tools"
 WORKDIR /root
 RUN yumdownloader --source unixODBC
 RUN rpm -ivh unixODBC*.src.rpm
+RUN ls unixODBC*.src.rpm
 WORKDIR /root/rpmbuild/SOURCES
 RUN mkdir /root/rpmbuild/SOURCES/unixODBC
 RUN tar -xvf unixODBC*.tar.gz -C unixODBC --strip-components=1
+RUN rm unixODBC*.tar.gz unixODBC*.src.rpm
 WORKDIR /root/rpmbuild/SOURCES/unixODBC
 RUN ./configure --sysconfdir=/opt/python --disable-gui --disable-drivers --enable-iconv --with-iconv-char-enc=UTF8 --with-iconv-ucode-enc=UTF16LE --prefix=/root/unixODBC-install
 RUN make install
