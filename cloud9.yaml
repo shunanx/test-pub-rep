@@ -207,6 +207,8 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
+      BucketName:
+        Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-deployment
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -239,6 +241,7 @@ Resources:
                 - source <(curl -s https://github.com/shunanx/test-pub-rep/blob/main/cloud9-resize.sh)
                 - cd test-pub-rep
                 - sh build_layer.sh
+                - aws s3 cp pyodbc39.zip s3://autodbm-${AWS::Region}-${AWS::AccountId}-deployment/layer/
                 - echo "Bootstrap completed with return code $?"
 
   DBMigrateXpressC9BootstrapAssociation:
@@ -248,7 +251,8 @@ Resources:
       Name: !Ref DBMigrateXpressC9SSMDocument
       OutputLocation:
         S3Location:
-          OutputS3BucketName: !Ref DBMigrateXpressBucket
+          OutputS3BucketName:
+            Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-deployment
           OutputS3KeyPrefix: bootstrapoutput
       Targets:
         - Key: tag:SSMBootstrap
@@ -300,7 +304,7 @@ Outputs:
   DBMigrateXpressBucket:
     Value:
       Ref:
-        DBMigrateXpressBucket
+        Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-deployment/layer/
 
         # - echo '=== Resizing the Instance volume'
         # - !Sub SIZE=20
