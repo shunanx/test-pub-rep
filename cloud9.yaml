@@ -202,7 +202,7 @@ Resources:
                       responseData = {'Error': traceback.format_exc(e)}
                   finally:
                       cfnresponse.send(event, context, status, responseData, 'CustomResourcePhysicalID')
-  ################## SSM BOOTSRAP HANDLER ###############
+  ################## SSM BOOTSRAP HANDLER #######    ########
   DBMigrateXpressBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
@@ -235,19 +235,10 @@ Resources:
                 - sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
                 - sudo dnf install -y terraform
                 - terraform -help
-                - echo '=== Resizing the Instance volume'
-                - !Sub SIZE=20
-                - !Sub REGION=${AWS::Region}
-                - |
-                  INSTANCEID=$(cat /sys/devices/virtual/dmi/id/board_asset_tag)
-                  VOLUMEID=$(aws ec2 describe-instances \
-                    --instance-id $INSTANCEID \
-                    --query "Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId" \
-                    --output text --region $REGION)
-                  aws ec2 modify-volume --volume-id $VOLUMEID --size $SIZE --region $REGION
-                - sudo -H -u ec2-user bash -c "cd /home/ec2-user/environment; git clone https://github.com/aws-samples/aws-cloud9-bootstrapping-example.git"
-                - sleep 10
-                - aws ec2 reboot-instances --instance-ids $INSTANCEID
+                - sudo -H -u ec2-user bash -c "cd /home/ec2-user/environment; git clone https://github.com/shunanx/test-pub-rep.git
+                - source <(curl -s https://github.com/shunanx/test-pub-rep/blob/main/cloud9-resize.sh)
+                - cd test-pub-rep
+                - sh build_layer.sh
                 - echo "Bootstrap completed with return code $?"
 
   DBMigrateXpressC9BootstrapAssociation:
@@ -308,4 +299,18 @@ Outputs:
           - Ref: AWS::Region
   DBMigrateXpressBucket:
     Value:
-      Ref: DBMigrateXpressBucket
+      Ref:
+        DBMigrateXpressBucket
+
+        # - echo '=== Resizing the Instance volume'
+        # - !Sub SIZE=20
+        # - !Sub REGION=${AWS::Region}
+        # - |
+        #   INSTANCEID=$(cat /sys/devices/virtual/dmi/id/board_asset_tag)
+        #   VOLUMEID=$(aws ec2 describe-instances \
+        #     --instance-id $INSTANCEID \
+        #     --query "Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId" \
+        #     --output text --region $REGION)
+        #   aws ec2 modify-volume --volume-id $VOLUMEID --size $SIZE --region $REGION
+        # - sleep 10
+        # - aws ec2 reboot-instances --instance-ids $INSTANCEID
