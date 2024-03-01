@@ -3,7 +3,7 @@ ENTRYPOINT []
 
 #Install general tools
 RUN yum install -y yum-utils tar
-RUN yum groupinstall -y "Development Tools"
+RUN #yum groupinstall -y "Development Tools"
 
 #Install unixODBC
 WORKDIR /root
