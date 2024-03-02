@@ -216,11 +216,18 @@ Resources:
                 - sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
                 - sudo dnf install -y terraform
                 - terraform -help
-                - sudo -H -u ec2-user bash -c "cd /home/ec2-user/environment; git clone https://github.com/shunanx/test-pub-rep.git"
-                - source <(curl -s https://github.com/shunanx/test-pub-rep/blob/main/cloud9-resize.sh)
-                - cd test-pub-rep
-                - sh build_layer.sh
-                - aws s3 cp pyodbc39.zip s3://autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment/layer/
+                - echo '=== Resizing the Instance volume'
+                - !Sub SIZE=30
+                - !Sub REGION=${AWS::Region}
+                - |
+                  INSTANCEID=$(cat /sys/devices/virtual/dmi/id/board_asset_tag)
+                  VOLUMEID=$(aws ec2 describe-instances \
+                    --instance-id $INSTANCEID \
+                    --query "Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId" \
+                    --output text --region $REGION)
+                  aws ec2 modify-volume --volume-id $VOLUMEID --size $SIZE --region $REGION
+                - sleep 5
+                - aws ec2 reboot-instances --instance-ids $INSTANCEID
                 - echo "Bootstrap completed with return code $?"
 
   DBMigrateXpressC9BootstrapAssociation:
