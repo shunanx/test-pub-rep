@@ -72,8 +72,8 @@ Resources:
                   - s3:PutObject
                   - s3:ListBucket
                 Resource:
-                  - Fn::Sub: arn:aws:s3:::autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment
-                  - Fn::Sub: arn:aws:s3:::autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment/*
+                  - Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment
+                  - Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment/*
 
   ################## LAMBDA BOOTSTRAP FUNCTION ################
 
@@ -216,7 +216,7 @@ Resources:
                 - sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
                 - sudo dnf install -y terraform
                 - terraform -help
-                - sudo -H -u ec2-user bash -c "cd /home/ec2-user/environment; git clone https://github.com/shunanx/test-pub-rep.git
+                - sudo -H -u ec2-user bash -c "cd /home/ec2-user/environment; git clone https://github.com/shunanx/test-pub-rep.git"
                 - source <(curl -s https://github.com/shunanx/test-pub-rep/blob/main/cloud9-resize.sh)
                 - cd test-pub-rep
                 - sh build_layer.sh
@@ -257,12 +257,6 @@ Resources:
       InstanceType: t3.small
       Name:
         Ref: AWS::StackName
-      # OwnerArn:
-      #   !If [
-      #     Create3rdPartyResources,
-      #     !Ref DBMigrateXpressOwnerArn,
-      #     !Ref "AWS::NoValue",
-      #   ]
       Tags:
         - Key: SSMBootstrap
           Value: Active
