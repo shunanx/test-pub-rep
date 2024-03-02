@@ -72,8 +72,8 @@ Resources:
                   - s3:PutObject
                   - s3:ListBucket
                 Resource:
-                  - Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment
-                  - Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment/*
+                  - Fn::Sub: arn:aws:s3:::autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment
+                  - Fn::Sub: arn:aws:s3:::autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment/*
 
   ################## LAMBDA BOOTSTRAP FUNCTION ################
 
