@@ -1,35 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: AWS CloudFormation template for dynamic Cloud 9 setups. Modified based on https://github.com/aws-samples/aws-cloud9-bootstrapping-example/blob/main/example_instancestack.yaml
-Parameters:
-  # DBMigrateXpressC9InstanceType:
-  #   Description: DBMigrateXpress Cloud9 instance type
-  #   Type: String
-  #   Default: t3.small
-  #   AllowedValues:
-  #     - t2.micro
-  #     - t3.micro
-  #     - t3.small
-  #     - t3.medium
-  # ConstraintDescription: Must be a valid Cloud9 instance type
-  # DBMigrateXpressC9EnvType:
-  #   Description: Environment type.
-  #   Default: self
-  #   Type: String
-  #   AllowedValues:
-  #     - self
-  #     - 3rdParty
-  #   ConstraintDescription: must specify self or 3rdParty.
-  # DBMigrateXpressOwnerArn:
-  #   Type: String
-  #   Description: The Arn of the Cloud9 Owner to be set if 3rdParty deployment.
-  #   Default: ""
-  # DBMigrateXpressC9InstanceVolumeSize:
-  #   Type: Number
-  #   Description: The Size in GB of the Cloud9 Instance Volume.
-  #   Default: 20
-
-# Conditions:
-#   Create3rdPartyResources: !Equals [!Ref DBMigrateXpressC9EnvType, 3rdParty]
 
 Resources:
   ################## PERMISSIONS AND ROLES #################
@@ -312,18 +282,4 @@ Outputs:
           - Ref: AWS::Region
   DBMigrateXpressBucket:
     Value:
-      Ref:
-        Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment
-
-        # - echo '=== Resizing the Instance volume'
-        # - !Sub SIZE=20
-        # - !Sub REGION=${AWS::Region}
-        # - |
-        #   INSTANCEID=$(cat /sys/devices/virtual/dmi/id/board_asset_tag)
-        #   VOLUMEID=$(aws ec2 describe-instances \
-        #     --instance-id $INSTANCEID \
-        #     --query "Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId" \
-        #     --output text --region $REGION)
-        #   aws ec2 modify-volume --volume-id $VOLUMEID --size $SIZE --region $REGION
-        # - sleep 10
-        # - aws ec2 reboot-instances --instance-ids $INSTANCEID
+      Fn::Sub: autodbm-${AWS::Region}-${AWS::AccountId}-${AWS::StackName}-deployment
